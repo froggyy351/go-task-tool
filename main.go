@@ -23,7 +23,7 @@ func main() {
 	case "ls":
 		runLs(args[1:])
 	case "mv":
-		fmt.Println("TODO: ボールを移動する")
+		runMv(args[1:])
 	case "done":
 		fmt.Println("TODO: タスクを完了にする")
 	case "edit":
