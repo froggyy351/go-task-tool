@@ -25,11 +25,11 @@ func main() {
 	case "mv":
 		runMv(args[1:])
 	case "done":
-		fmt.Println("TODO: タスクを完了にする")
+		runDone(args[1:])
 	case "edit":
-		fmt.Println("TODO: タスクを編集する")
+		runEdit(args[1:])
 	case "rm":
-		fmt.Println("TODO: タスクを削除する")
+		runRm(args[1:])
 	default:
 		fmt.Printf("不明なコマンド: %s\n\n", args[0])
 		printUsage()
