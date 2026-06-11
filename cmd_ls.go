@@ -38,11 +38,11 @@ func runLs(args []string) {
 		return
 	}
 
-	sort.Slice(tasks, func(i, j int) bool {
+	sort.SliceStable(tasks, func(i, j int) bool {
 		return tasks[i].Due.Before(tasks[j].Due)
 	})
 
-	today := time.Now().Truncate(24 * time.Hour)
+	today := todayUTC()
 
 	if !filterOther {
 		printSection("MyBall", "my", tasks, today)
@@ -68,7 +68,6 @@ func printSection(title, ball string, tasks []Task, today time.Time) {
 		return
 	}
 
-	// このセクション内の最大名前幅を求め、上限を nameMaxWidth に収める。
 	nameWidth := 0
 	for _, t := range filtered {
 		w := runewidth.StringWidth(t.Name)
@@ -83,7 +82,7 @@ func printSection(title, ball string, tasks []Task, today time.Time) {
 	for _, t := range filtered {
 		line := formatTask(t, today, nameWidth)
 		daysLeft := int(t.Due.Sub(today).Hours() / 24)
-		if daysLeft == 0 {
+		if daysLeft <= 0 {
 			line = red(line)
 		}
 		fmt.Println(line)
@@ -119,14 +118,11 @@ func formatTask(t Task, today time.Time, nameWidth int) string {
 	return line
 }
 
-// truncatePad は文字列を表示幅 width に切り詰めて右埋めする。
-// width を超える場合は末尾を「…」に置き換える。
 func truncatePad(s string, width int) string {
 	w := runewidth.StringWidth(s)
 	if w <= width {
 		return s + strings.Repeat(" ", width-w)
 	}
-	// 「…」(幅2) を収めるために width-2 まで詰める。
 	result := []rune{}
 	current := 0
 	for _, r := range s {
@@ -139,14 +135,6 @@ func truncatePad(s string, width int) string {
 	}
 	truncated := string(result) + "…"
 	return truncated + strings.Repeat(" ", width-current-2)
-}
-
-func padRight(s string, width int) string {
-	w := runewidth.StringWidth(s)
-	if w >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-w)
 }
 
 func runLsDone() {
@@ -168,11 +156,10 @@ func runLsDone() {
 		return
 	}
 
-	sort.Slice(tasks, func(i, j int) bool {
+	sort.SliceStable(tasks, func(i, j int) bool {
 		return tasks[i].DoneDate.After(tasks[j].DoneDate)
 	})
 
-	// 完了済みも同様に動的に列幅を決める。
 	nameWidth := 0
 	for _, t := range tasks {
 		w := runewidth.StringWidth(t.Name)
@@ -192,6 +179,13 @@ func runLsDone() {
 			t.Due.Format("2006-01-02"),
 		)
 	}
+}
+
+// todayUTC はローカルの今日の日付をUTC midnightとして返す。
+// Due日付がUTC midnightでparseされるため、比較がずれないようにする。
+func todayUTC() time.Time {
+	y, m, d := time.Now().Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
 func contains(args []string, flag string) bool {

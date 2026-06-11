@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// runDone は `tt done <ID>` を処理する。
-// タスクを tt.txt から削除し、tt_done.txt に完了日付きで追記する。
 func runDone(args []string) {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "使い方: tt done <ID>")
@@ -21,19 +19,18 @@ func runDone(args []string) {
 		os.Exit(1)
 	}
 
-	path, err := dataFilePath("tt.txt")
+	activePath, err := dataFilePath("tt.txt")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "エラー:", err)
 		os.Exit(1)
 	}
 
-	tasks, err := loadTasks(path)
+	tasks, err := loadTasks(activePath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ファイル読み込みエラー:", err)
 		os.Exit(1)
 	}
 
-	// IDが一致するタスクを探し、残りと分離する。
 	var target *Task
 	var remaining []Task
 	for i, t := range tasks {
@@ -49,25 +46,26 @@ func runDone(args []string) {
 		os.Exit(1)
 	}
 
-	// tt_done.txt に「元のTSV行 + タブ + 完了日」を追記する。
 	donePath, err := dataFilePath("tt_done.txt")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "エラー:", err)
 		os.Exit(1)
 	}
 
-	doneFile, err := os.OpenFile(donePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	doneTasks, err := loadDoneTasks(donePath)
 	if err != nil {
+		fmt.Fprintln(os.Stderr, "完了ファイル読み込みエラー:", err)
+		os.Exit(1)
+	}
+
+	doneTasks = append(doneTasks, DoneTask{Task: *target, DoneDate: time.Now()})
+
+	if err := saveDoneTasks(donePath, doneTasks); err != nil {
 		fmt.Fprintln(os.Stderr, "完了ファイル書き込みエラー:", err)
 		os.Exit(1)
 	}
-	defer doneFile.Close()
 
-	doneDate := time.Now().Format("2006-01-02")
-	fmt.Fprintf(doneFile, "%s\t%s\n", target.toLine(), doneDate)
-
-	// tt.txt から該当タスクを除いて上書き保存する。
-	if err := saveTasks(path, remaining); err != nil {
+	if err := saveTasks(activePath, remaining); err != nil {
 		fmt.Fprintln(os.Stderr, "ファイル書き込みエラー:", err)
 		os.Exit(1)
 	}

@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-// Task は1件のタスクを表す構造体（Goでいうデータの型定義）。
 type Task struct {
 	ID    int
 	Name  string
@@ -19,7 +18,15 @@ type Task struct {
 	Owner string // Ball=="other" のときだけ使う
 }
 
-// ファイルパスを実行ファイルと同じフォルダに解決する。
+type DoneTask struct {
+	Task
+	DoneDate time.Time
+}
+
+func (t DoneTask) toLine() string {
+	return fmt.Sprintf("%s\t%s", t.Task.toLine(), t.DoneDate.Format("2006-01-02"))
+}
+
 func dataFilePath(name string) (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -28,8 +35,6 @@ func dataFilePath(name string) (string, error) {
 	return filepath.Join(filepath.Dir(exe), name), nil
 }
 
-// TSV の1行を Task に変換する。
-// 形式: ID\tName\tDue\tBall\tOwner
 func parseLine(line string) (Task, error) {
 	parts := strings.Split(line, "\t")
 	if len(parts) < 5 {
@@ -55,7 +60,6 @@ func parseLine(line string) (Task, error) {
 	}, nil
 }
 
-// Task を TSV の1行に変換する。
 func (t Task) toLine() string {
 	return fmt.Sprintf("%d\t%s\t%s\t%s\t%s",
 		t.ID,
@@ -66,7 +70,6 @@ func (t Task) toLine() string {
 	)
 }
 
-// ファイルから全タスクを読み込む。ファイルが存在しない場合は空スライスを返す。
 func loadTasks(path string) ([]Task, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
@@ -93,29 +96,29 @@ func loadTasks(path string) ([]Task, error) {
 	return tasks, scanner.Err()
 }
 
-// タスク一覧をファイルに書き出す（上書き）。
+// saveTasks は一時ファイルに書き出してからリネームする（書き込み中クラッシュ対策）。
 func saveTasks(path string, tasks []Task) error {
-	f, err := os.Create(path)
+	tmp := path + ".tmp"
+	f, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-
 	w := bufio.NewWriter(f)
 	for _, t := range tasks {
 		fmt.Fprintln(w, t.toLine())
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
-// DoneTask は完了済みタスク（Task + 完了日）を表す。
-type DoneTask struct {
-	Task
-	DoneDate time.Time
-}
-
-// tt_done.txt の1行を DoneTask に変換する。
-// 形式: ID\tName\tDue\tBall\tOwner\tDoneDate
 func parseDoneLine(line string) (DoneTask, error) {
 	parts := strings.Split(line, "\t")
 	if len(parts) < 6 {
@@ -132,7 +135,6 @@ func parseDoneLine(line string) (DoneTask, error) {
 	return DoneTask{Task: t, DoneDate: doneDate}, nil
 }
 
-// tt_done.txt から全完了タスクを読み込む。
 func loadDoneTasks(path string) ([]DoneTask, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
@@ -159,10 +161,38 @@ func loadDoneTasks(path string) ([]DoneTask, error) {
 	return tasks, scanner.Err()
 }
 
-// 現在の最大IDを求めて +1 を返す。タスクが0件なら 1 を返す。
-func nextID(tasks []Task) int {
-	max := 0
+// saveDoneTasks は完了ファイルを一時ファイル経由で上書き保存する。
+func saveDoneTasks(path string, tasks []DoneTask) error {
+	tmp := path + ".tmp"
+	f, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	w := bufio.NewWriter(f)
 	for _, t := range tasks {
+		fmt.Fprintln(w, t.toLine())
+	}
+	if err := w.Flush(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// nextID は現役タスクと完了タスク両方の最大IDを考慮して次のIDを返す。
+func nextID(active []Task, done []DoneTask) int {
+	max := 0
+	for _, t := range active {
+		if t.ID > max {
+			max = t.ID
+		}
+	}
+	for _, t := range done {
 		if t.ID > max {
 			max = t.ID
 		}
