@@ -61,7 +61,7 @@ func printSection(title, ball string, tasks []Task, today time.Time) {
 		}
 	}
 
-	fmt.Printf("=== %s (%d件) ===\n", title, len(filtered))
+	fmt.Println(green(fmt.Sprintf("=== %s (%d件) ===", title, len(filtered))))
 
 	if len(filtered) == 0 {
 		fmt.Println("  (なし)")
@@ -70,7 +70,12 @@ func printSection(title, ball string, tasks []Task, today time.Time) {
 	}
 
 	for _, t := range filtered {
-		fmt.Println(formatTask(t, today))
+		line := formatTask(t, today)
+		daysLeft := int(t.Due.Sub(today).Hours() / 24)
+		if daysLeft == 0 {
+			line = red(line)
+		}
+		fmt.Println(line)
 	}
 	fmt.Println()
 }
@@ -128,7 +133,7 @@ func runLsDone() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("=== 完了済み (%d件) ===\n", len(tasks))
+	fmt.Println(green(fmt.Sprintf("=== 完了済み (%d件) ===", len(tasks))))
 	if len(tasks) == 0 {
 		fmt.Println("  (なし)")
 		return
