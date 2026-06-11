@@ -29,6 +29,8 @@ func main() {
 		runEdit(args[1:])
 	case "rm":
 		runRm(args[1:])
+	case "version", "--version", "-v":
+		fmt.Println("tt", version)
 	case "help":
 		printUsage()
 	default:
@@ -52,6 +54,7 @@ func printUsage() {
   tt edit <ID> [-d <日付>] [-n "名前"]  期限・名前を変更
   tt rm <ID>                         削除
   tt help                            この使い方を表示
+  tt version                         バージョンを表示
 
 日付指定:
   2026-06-20   絶対指定
