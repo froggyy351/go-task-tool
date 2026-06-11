@@ -9,6 +9,12 @@ import (
 )
 
 func runLs(args []string) {
+	// --done フラグがあれば完了済みタスクを表示して終了。
+	if contains(args, "--done") {
+		runLsDone()
+		return
+	}
+
 	// --my / --other フラグを確認する。
 	filterMy := contains(args, "--my")
 	filterOther := contains(args, "--other")
@@ -107,6 +113,40 @@ func padRight(s string, width int) string {
 		return string(runes)
 	}
 	return s + strings.Repeat(" ", width-len(runes))
+}
+
+func runLsDone() {
+	path, err := dataFilePath("tt_done.txt")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "エラー:", err)
+		os.Exit(1)
+	}
+
+	tasks, err := loadDoneTasks(path)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "ファイル読み込みエラー:", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("=== 完了済み (%d件) ===\n", len(tasks))
+	if len(tasks) == 0 {
+		fmt.Println("  (なし)")
+		return
+	}
+
+	// 完了日が新しい順に表示する。
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].DoneDate.After(tasks[j].DoneDate)
+	})
+
+	for _, t := range tasks {
+		namePart := padRight(t.Name, 20)
+		fmt.Printf("  [%d] %s 完了: %s  (期限: %s)\n",
+			t.ID, namePart,
+			t.DoneDate.Format("2006-01-02"),
+			t.Due.Format("2006-01-02"),
+		)
+	}
 }
 
 func contains(args []string, flag string) bool {

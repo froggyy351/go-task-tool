@@ -42,6 +42,7 @@ func printUsage() {
 使い方:
   tt add "タスク名" -d 2026-06-20   タスクを追加（MyBall）
   tt ls                            一覧を期限が近い順に表示
+  tt ls --done                     完了済みタスクを表示
   tt mv <ID> <相手>                ボールを相手へ（me で自分に引き取り）
   tt done <ID>                     完了にする
   tt edit <ID> -d 2026-06-25       期限を変更

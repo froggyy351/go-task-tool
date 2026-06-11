@@ -108,6 +108,57 @@ func saveTasks(path string, tasks []Task) error {
 	return w.Flush()
 }
 
+// DoneTask は完了済みタスク（Task + 完了日）を表す。
+type DoneTask struct {
+	Task
+	DoneDate time.Time
+}
+
+// tt_done.txt の1行を DoneTask に変換する。
+// 形式: ID\tName\tDue\tBall\tOwner\tDoneDate
+func parseDoneLine(line string) (DoneTask, error) {
+	parts := strings.Split(line, "\t")
+	if len(parts) < 6 {
+		return DoneTask{}, fmt.Errorf("行の形式が不正: %s", line)
+	}
+	t, err := parseLine(strings.Join(parts[:5], "\t"))
+	if err != nil {
+		return DoneTask{}, err
+	}
+	doneDate, err := time.Parse("2006-01-02", parts[5])
+	if err != nil {
+		return DoneTask{}, fmt.Errorf("完了日の形式が不正: %s", parts[5])
+	}
+	return DoneTask{Task: t, DoneDate: doneDate}, nil
+}
+
+// tt_done.txt から全完了タスクを読み込む。
+func loadDoneTasks(path string) ([]DoneTask, error) {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return []DoneTask{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var tasks []DoneTask
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+		t, err := parseDoneLine(line)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, scanner.Err()
+}
+
 // 現在の最大IDを求めて +1 を返す。タスクが0件なら 1 を返す。
 func nextID(tasks []Task) int {
 	max := 0
