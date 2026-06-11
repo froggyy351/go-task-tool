@@ -6,16 +6,18 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/mattn/go-runewidth"
 )
 
+const nameMaxWidth = 50 // タスク名の表示幅の上限（全角25文字相当）
+
 func runLs(args []string) {
-	// --done フラグがあれば完了済みタスクを表示して終了。
 	if contains(args, "--done") {
 		runLsDone()
 		return
 	}
 
-	// --my / --other フラグを確認する。
 	filterMy := contains(args, "--my")
 	filterOther := contains(args, "--other")
 
@@ -36,14 +38,12 @@ func runLs(args []string) {
 		return
 	}
 
-	// 期限が近い順にソートする。
 	sort.Slice(tasks, func(i, j int) bool {
 		return tasks[i].Due.Before(tasks[j].Due)
 	})
 
 	today := time.Now().Truncate(24 * time.Hour)
 
-	// フィルタに応じてセクションを表示する。
 	if !filterOther {
 		printSection("MyBall", "my", tasks, today)
 	}
@@ -53,7 +53,6 @@ func runLs(args []string) {
 }
 
 func printSection(title, ball string, tasks []Task, today time.Time) {
-	// 対象セクションのタスクだけ抽出する。
 	var filtered []Task
 	for _, t := range tasks {
 		if t.Ball == ball {
@@ -69,8 +68,20 @@ func printSection(title, ball string, tasks []Task, today time.Time) {
 		return
 	}
 
+	// このセクション内の最大名前幅を求め、上限を nameMaxWidth に収める。
+	nameWidth := 0
 	for _, t := range filtered {
-		line := formatTask(t, today)
+		w := runewidth.StringWidth(t.Name)
+		if w > nameWidth {
+			nameWidth = w
+		}
+	}
+	if nameWidth > nameMaxWidth {
+		nameWidth = nameMaxWidth
+	}
+
+	for _, t := range filtered {
+		line := formatTask(t, today, nameWidth)
 		daysLeft := int(t.Due.Sub(today).Hours() / 24)
 		if daysLeft == 0 {
 			line = red(line)
@@ -80,10 +91,9 @@ func printSection(title, ball string, tasks []Task, today time.Time) {
 	fmt.Println()
 }
 
-func formatTask(t Task, today time.Time) string {
+func formatTask(t Task, today time.Time, nameWidth int) string {
 	daysLeft := int(t.Due.Sub(today).Hours() / 24)
 
-	// 期限の状態を判定する。
 	var dueMark string
 	switch {
 	case daysLeft < 0:
@@ -93,17 +103,15 @@ func formatTask(t Task, today time.Time) string {
 	case daysLeft <= 3:
 		dueMark = fmt.Sprintf("[!あと%d日]", daysLeft)
 	default:
-		dueMark = fmt.Sprintf("  あと%d日 ", daysLeft)
+		dueMark = fmt.Sprintf("あと%d日", daysLeft)
 	}
 
-	// ID と名前を固定幅にして揃える。
 	idPart := fmt.Sprintf("[%d]", t.ID)
-	namePart := padRight(t.Name, 20)
+	namePart := truncatePad(t.Name, nameWidth)
 	duePart := t.Due.Format("2006-01-02")
 
-	line := fmt.Sprintf("  %-4s %s %s %s", idPart, namePart, duePart, dueMark)
+	line := fmt.Sprintf("  %-5s  %s  %s  %s", idPart, namePart, duePart, dueMark)
 
-	// OtherBall は担当者を追加表示する。
 	if t.Ball == "other" && t.Owner != "" {
 		line += fmt.Sprintf("  担当: %s", t.Owner)
 	}
@@ -111,13 +119,34 @@ func formatTask(t Task, today time.Time) string {
 	return line
 }
 
-// 文字列を指定の幅に右埋めする（日本語考慮なし・簡易版）。
-func padRight(s string, width int) string {
-	runes := []rune(s)
-	if len(runes) >= width {
-		return string(runes)
+// truncatePad は文字列を表示幅 width に切り詰めて右埋めする。
+// width を超える場合は末尾を「…」に置き換える。
+func truncatePad(s string, width int) string {
+	w := runewidth.StringWidth(s)
+	if w <= width {
+		return s + strings.Repeat(" ", width-w)
 	}
-	return s + strings.Repeat(" ", width-len(runes))
+	// 「…」(幅2) を収めるために width-2 まで詰める。
+	result := []rune{}
+	current := 0
+	for _, r := range s {
+		rw := runewidth.RuneWidth(r)
+		if current+rw > width-2 {
+			break
+		}
+		result = append(result, r)
+		current += rw
+	}
+	truncated := string(result) + "…"
+	return truncated + strings.Repeat(" ", width-current-2)
+}
+
+func padRight(s string, width int) string {
+	w := runewidth.StringWidth(s)
+	if w >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-w)
 }
 
 func runLsDone() {
@@ -139,14 +168,25 @@ func runLsDone() {
 		return
 	}
 
-	// 完了日が新しい順に表示する。
 	sort.Slice(tasks, func(i, j int) bool {
 		return tasks[i].DoneDate.After(tasks[j].DoneDate)
 	})
 
+	// 完了済みも同様に動的に列幅を決める。
+	nameWidth := 0
 	for _, t := range tasks {
-		namePart := padRight(t.Name, 20)
-		fmt.Printf("  [%d] %s 完了: %s  (期限: %s)\n",
+		w := runewidth.StringWidth(t.Name)
+		if w > nameWidth {
+			nameWidth = w
+		}
+	}
+	if nameWidth > nameMaxWidth {
+		nameWidth = nameMaxWidth
+	}
+
+	for _, t := range tasks {
+		namePart := truncatePad(t.Name, nameWidth)
+		fmt.Printf("  [%d]  %s  完了: %s  (期限: %s)\n",
 			t.ID, namePart,
 			t.DoneDate.Format("2006-01-02"),
 			t.Due.Format("2006-01-02"),
